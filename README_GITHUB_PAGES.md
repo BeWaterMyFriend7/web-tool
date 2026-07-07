@@ -1,111 +1,56 @@
-# AirGap Scan Accumulator V4.2.4 GitHub Pages 操作手册
+# GitHub Pages 操作手册 - V4.3
 
-## 1. 部署
+## 1. 上传文件
 
-把全部文件上传到 GitHub 仓库根目录：
+把以下文件放到 GitHub 仓库根目录：
 
 ```text
 .nojekyll
 index.html
-sender_scan_v4_2_4.html
-receiver_nanoscan_v4_2_4_fast.html
+sender_scan_v4_3.html
+receiver_nanoscan_v4_3.html
 README.md
 README_GITHUB_PAGES.md
 ```
 
-进入 GitHub 仓库：
+## 2. 开启 GitHub Pages
+
+进入仓库：
 
 ```text
-Settings → Pages → Deploy from a branch → main / root
+Settings → Pages
 ```
 
-访问：
+选择：
 
 ```text
-https://<your-user>.github.io/<repo>/
+Deploy from a branch
+main / root
 ```
 
-## 2. 推荐主流程
+## 3. 使用
 
-发送端打开：
+发送端：
 
 ```text
-sender_scan_v4_2_4.html
+sender_scan_v4_3.html
 ```
 
-使用默认参数：
+接收端：
 
 ```text
-每片字节：1200
-播放间隔：600ms
+receiver_nanoscan_v4_3.html
 ```
 
-接收端打开：
+## 4. 推荐节奏
 
 ```text
-receiver_nanoscan_v4_2_4_fast.html
+发送端播放间隔：600ms
+接收端成功暂停：500ms
 ```
 
-使用默认参数：
+接收端比发送端短一点，可以提前恢复识别，等待下一张二维码。
 
-```text
-模式：跟手优先：相机常开低频识别
-FPS：1
-分辨率：360
-接收冷却：500ms
-```
+## 5. 说明
 
-核心节奏：
-
-```text
-发送端每 600ms 切一张
-接收端扫到后冷却 500ms
-接收端比发送端早约 800ms 恢复识别
-```
-
-这样接收端可以提前准备扫下一片，交互会比完全一致更顺。
-
-## 3. 仍然卡顿时
-
-优先保持：
-
-```text
-跟手优先
-FPS=1
-分辨率=360
-```
-
-再调整：
-
-```text
-发送端播放间隔 3000 → 3500ms
-接收端接收冷却 500 → 700ms
-```
-
-## 4. 漏扫时
-
-调整：
-
-```text
-接收端接收冷却 500 → 400ms
-发送端每片字节 1200 → 900
-发送端播放间隔 3000 → 3500ms
-```
-
-## 5. 停止摄像头
-
-点击：
-
-```text
-停止摄像头
-```
-
-V4.2.4 会：
-
-```text
-调用 NanoScan stopScan
-停止 video.srcObject tracks
-停止 getUserMedia 捕获到的所有 streams
-清空 camera 容器
-取消自动定时器
-```
+V4.3 保留 V4 接收端的 NanoScan 连续扫描方式，不再使用后续版本的“扫到即停相机/重启相机”策略，因为那会导致不跟手和准确率下降。
