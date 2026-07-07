@@ -1,20 +1,33 @@
-# AirGap Scan Accumulator V4.1 - Smooth NanoScan
+# AirGap Scan Accumulator V4.2.2 - Auto Loop Single Scan
+
+## 本版修正
+
+你说得对：发送端是自动轮播，接收端不应该每片都手动触发。V4.2.2 改为默认“自动单片循环”。
+
+流程：
+
+```text
+点击一次“开始自动接收”
+→ NanoScan 扫当前分片
+→ 扫到新分片后立刻 stopScan + 停止 video tracks + 清空预览容器
+→ 等待 600ms
+→ 自动重新打开摄像头继续扫下一片
+→ 直到收齐或用户点击“停止摄像头”
+```
+
+## 关键改动
+
+1. 接收端默认勾选“跟随发送端自动轮播”。
+2. 接收端按钮改为“开始自动接收”，不需要每片手动点。
+3. 停止按钮会取消自动重启定时器，避免停止后又自动打开摄像头。
+4. 发送端分片大小真正提升到 2000，上限不再被脚本内部 800 限制。
+5. 发送端默认每片字节 1200，播放间隔 4000ms，更适合接收端 stop/restart 模式。
 
 ## 文件
 
-```text
-index.html
-sender_scan_v4_1.html
-receiver_nanoscan_v4_1.html
-README.md
-README_GITHUB_PAGES.md
-.nojekyll
-```
-
-## V4.1 优化点
-
-1. 接收端删除自定义蓝色扫描框，改用 NanoScan 自带 `frame` / `marker`。
-2. 顶部进度和提示移到相机画面外，不覆盖中心区域。
-3. 接收端默认降低扫码强度：`fps=2`、`resolution=480×480`、`zoom=1.0`、`trick=false`。
-4. 日志限制最多 50 条，减少 DOM 压力。
-5. 发送端默认更稳：每片 280、纠错 Q、QR 像素 16、留白 8、播放间隔 2500ms。
+- index.html
+- sender_scan_v4_2_2.html
+- receiver_nanoscan_v4_2_2_auto.html
+- README.md
+- README_GITHUB_PAGES.md
+- .nojekyll

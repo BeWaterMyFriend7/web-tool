@@ -1,87 +1,65 @@
-# AirGap Scan Accumulator V4.1 GitHub Pages 操作手册
+# AirGap Scan Accumulator V4.2.2 GitHub Pages 操作手册
 
-## 1. 部署
+## 部署
 
-把全部文件上传到 GitHub 仓库根目录：
+上传全部文件到 GitHub 仓库根目录，开启 GitHub Pages：
 
 ```text
-.nojekyll
-index.html
-sender_scan_v4_1.html
-receiver_nanoscan_v4_1.html
-README.md
-README_GITHUB_PAGES.md
+Settings → Pages → Deploy from a branch → main / root
 ```
 
-进入：
+## 页面
+
+发送端：
 
 ```text
-Settings → Pages
+sender_scan_v4_2_2.html
 ```
 
-选择：
+接收端：
 
 ```text
-Deploy from a branch
-main / root
+receiver_nanoscan_v4_2_2_auto.html
 ```
 
-## 2. 发送端使用
+## 推荐参数
 
-内网电脑打开：
-
-```text
-sender_scan_v4_1.html
-```
-
-推荐默认参数：
+发送端：
 
 ```text
-每片字节：280
+每片字节：1200
+最大：2000
 纠错：Q
 QR 像素：16
 留白：8
-播放间隔：2500ms
+播放间隔：4000ms
 ```
 
-## 3. 接收端使用
-
-手机打开 GitHub Pages 上的：
+接收端：
 
 ```text
-receiver_nanoscan_v4_1.html
-```
-
-操作：
-
-```text
-1. 点击“加载 NanoScan”
-2. 点击“开始扫码累加”
-3. 允许摄像头权限
-4. 让发送端二维码进入 NanoScan 自带扫描区域
-```
-
-V4.1 去掉了我们自己的蓝色定位框，避免两套扫描框冲突；识别框和标记由 NanoScan 自己处理。
-
-## 4. 卡顿时的建议
-
-保持默认：
-
-```text
-FPS：2
-分辨率：480×480
+模式：自动单片循环
+跟随发送端自动轮播：勾选
+重启延迟：600ms
+FPS：1
+分辨率：480
 缩放：1.0
-成功暂停：1500ms
 ```
 
-如果识别慢，可以逐步调高：
+## 使用流程
 
 ```text
-FPS：3 或 5
-分辨率：640×640 或 720×720
-缩放：1.2 或 1.5
+1. 发送端生成分片并自动播放
+2. 接收端点击“加载 NanoScan”
+3. 接收端点击“开始自动接收”
+4. 接收端扫到一片后会自动释放摄像头并自动重开
+5. 收齐后自动还原文本
 ```
 
-## 5. 缺片补扫
+如果仍卡顿：
 
-接收端点击“复制缺片”，把缺片列表粘贴到发送端“缺片播放列表”，再点击“只播放缺片”。
+```text
+发送端播放间隔调到 5000ms
+接收端重启延迟调到 1200ms
+分辨率保持 480 或降到 360
+```
