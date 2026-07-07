@@ -1,0 +1,791 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>AirGap Scan Accumulator 发送端 V4</title><style>
+:root{--bg:#0f172a;--panel:#111827;--text:#e5e7eb;--muted:#94a3b8;--border:#334155;--primary:#2563eb;--ok:#10b981;--warn:#f59e0b;--danger:#ef4444}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif}.wrap{max-width:1320px;margin:18px auto;padding:0 14px}h1{font-size:24px;margin:0 0 6px}.sub{color:var(--muted);line-height:1.6;margin-bottom:12px}.layout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:14px}.panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px}textarea{width:100%;min-height:240px;border:1px solid var(--border);border-radius:12px;padding:12px;background:#020617;color:#e5e7eb;font-family:Consolas,Menlo,monospace;line-height:1.55}label{display:block;color:var(--muted);font-size:13px;margin:10px 0 4px}input,select,button{border:1px solid var(--border);border-radius:10px;padding:9px 10px;font-size:14px;background:#020617;color:#e5e7eb}input[type=number]{width:108px}button{background:var(--primary);border-color:var(--primary);color:white;cursor:pointer;margin-right:6px;margin-top:8px}button.secondary{background:#1f2937;border-color:#475569}button.danger{background:#991b1b;border-color:#991b1b}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tip{margin-top:10px;padding:10px 12px;border-radius:12px;background:#1e293b;border:1px solid #475569;color:#fbbf24;font-size:13px;line-height:1.55}.info{color:#cbd5e1;font-size:13px;line-height:1.6;margin-top:10px}.stagePanel{background:#020617;border:1px solid var(--border);border-radius:16px;padding:14px;display:flex;flex-direction:column;min-height:720px}.stageHeader{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.bigTitle{font-weight:800;font-size:22px;color:white}.chip{border:1px solid #475569;border-radius:999px;padding:4px 10px;color:#cbd5e1;background:#0f172a}.qrStage{position:relative;flex:1;background:#dbeafe;border:8px solid #1e3a8a;border-radius:24px;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;box-shadow:inset 0 0 0 5px white}.qrFrame{background:#fff;border:8px solid #111827;border-radius:18px;padding:18px;box-shadow:0 10px 28px rgba(15,23,42,.32);display:flex;align-items:center;justify-content:center;max-width:100%;max-height:100%}#qrCanvas{background:#fff;image-rendering:pixelated;max-width:100%;height:auto}.partLabel{font-size:24px;font-weight:800;color:#1e3a8a;background:#fff;border:3px solid #1e40af;border-radius:999px;padding:8px 18px}.meta{display:flex;justify-content:space-between;gap:10px;width:100%;color:#1f2937;background:#fff;border:2px solid #1e40af;border-radius:12px;padding:8px 12px;font-size:13px}.ok{color:var(--ok);font-weight:700}.err{color:var(--danger);font-weight:700}.warn{color:var(--warn);font-weight:700}body.playMode{background:#fff}body.playMode .wrap{max-width:none;margin:0;padding:0}body.playMode .layout{display:block}body.playMode .layout>.panel:first-child,body.playMode h1,body.playMode .sub{display:none}body.playMode .stagePanel{height:100vh;border:none;border-radius:0;padding:10px;background:#020617}body.playMode .qrStage{border-width:10px;border-radius:26px;padding:18px}body.playMode .stageHeader{padding:0 10px}.log{font-family:Consolas,Menlo,monospace;color:#94a3b8;font-size:12px}@media(max-width:960px){.layout{grid-template-columns:1fr}.stagePanel{min-height:620px}}
+</style></head><body><div class="wrap"><h1>AirGap Scan Accumulator 发送端 V4</h1><div class="sub">单个超大二维码分片播放。接收端用 NanoScan 扫码累加，或手动粘贴 QRZ2 内容累加。</div><div class="layout"><section class="panel"><textarea id="input" placeholder="粘贴 JSON / Markdown / 日志 / 配置文本..."></textarea><div class="row"><button id="generate">生成分片</button><button class="secondary" id="clear">清空</button></div><div class="row"><label>每片字节<input id="chunkSize" type="number" value="300" min="120" max="800"></label><label>纠错<select id="ecc"><option value="Q" selected>Q 稳定</option><option value="M">M 容量</option><option value="H">H 最稳</option></select></label><label>QR 像素<input id="scale" type="number" value="14" min="6" max="26"></label><label>留白<input id="quiet" type="number" value="8" min="4" max="14"></label><label>播放间隔 ms<input id="interval" type="number" value="2200" min="800" max="8000"></label></div><label>缺片播放列表，可从接收端复制，例如 3,8,19</label><textarea id="missingInput" style="min-height:80px" placeholder="留空 = 全部分片循环播放"></textarea><div class="row"><button class="secondary" id="prev">上一片</button><button class="secondary" id="next">下一片</button><button id="play">自动播放</button><button class="danger" id="pause">暂停</button><button class="secondary" id="applyMissing">只播放缺片</button><button class="secondary" id="playMode">大屏模式/退出</button></div><div class="tip">推荐：每片 250～350 字节，纠错 Q，留白 8，播放间隔 2000～2500ms。扫不全时，复制缺片列表到这里补扫。</div><div id="info" class="info">等待生成。</div></section><section class="stagePanel"><div class="stageHeader"><div class="bigTitle" id="title">等待生成</div><div class="chip" id="chip">0 / 0</div></div><div class="qrStage"><div class="partLabel" id="partLabel">等待生成</div><div class="qrFrame"><canvas id="qrCanvas"></canvas></div><div class="meta"><span id="sessionMeta">Session -</span><span id="payloadMeta">请用接收端扫码</span></div></div></section></div></div><script>
+/*
+  单文件多二维码文本传输工具
+  - 发送端：UTF-8 文本 -> 按字节安全切片 -> base64url -> 多个标准二维码
+  - 接收端：粘贴扫码结果 -> CRC32 校验 -> 自动排序合并 -> 原始文本
+  - 二维码算法：Byte 模式，Version 1-40，纠错 L/M/Q/H，无外部依赖
+*/
+(function() {
+  "use strict";
+
+  var ECC_CODEWORDS_PER_BLOCK = [
+    [-1,7,10,15,20,26,18,20,24,30,18,20,24,26,30,22,24,28,30,28,28,28,28,30,30,26,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    [-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28],
+    [-1,13,22,18,26,18,24,18,22,20,24,28,26,24,20,30,24,28,28,26,30,28,30,30,30,30,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    [-1,17,28,22,16,22,28,26,26,24,28,24,28,22,24,24,30,28,28,26,28,30,24,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30]
+  ];
+
+  var NUM_ERROR_CORRECTION_BLOCKS = [
+    [-1,1,1,1,1,1,2,2,2,2,4,4,4,4,4,6,6,6,6,7,8,8,9,9,10,12,12,12,13,14,15,16,17,18,19,19,20,21,22,24,25],
+    [-1,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49],
+    [-1,1,1,2,2,4,4,6,6,8,8,8,10,12,16,12,17,16,18,21,20,23,23,25,27,29,34,34,35,38,40,43,45,48,51,53,56,59,62,65,68],
+    [-1,1,1,2,4,4,4,5,6,8,8,11,11,16,16,18,16,19,21,25,25,25,34,30,32,35,37,40,42,45,48,51,54,57,60,63,66,70,74,77,81]
+  ];
+
+  var ECC_LEVELS = { L: 0, M: 1, Q: 2, H: 3 };
+  var FORMAT_BITS = [1,0,3,2];
+
+  var chunks = [];
+  var currentIndex = 0;
+  var received = {};
+
+  function $(id) { return document.getElementById(id); }
+
+  function utf8Bytes(str) {
+    return Array.from(new TextEncoder().encode(str));
+  }
+
+  function bytesToText(bytes) {
+    return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+  }
+
+  function base64UrlFromBytes(bytes) {
+    var bin = "";
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function bytesFromBase64Url(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    var bin = atob(s);
+    var bytes = [];
+    for (var i = 0; i < bin.length; i++) bytes.push(bin.charCodeAt(i));
+    return bytes;
+  }
+
+  function lzwCompressBytes(input) {
+    if (!input.length) return [];
+    var dict = new Map();
+    for (var i = 0; i < 256; i++) dict.set(String.fromCharCode(i), i);
+    var dictSize = 256;
+    var w = "";
+    var codes = [];
+    for (var i = 0; i < input.length; i++) {
+      var c = String.fromCharCode(input[i]);
+      var wc = w + c;
+      if (dict.has(wc)) {
+        w = wc;
+      } else {
+        if (w !== "") codes.push(dict.get(w));
+        if (dictSize < 65535) dict.set(wc, dictSize++);
+        w = c;
+      }
+    }
+    if (w !== "") codes.push(dict.get(w));
+    var out = [];
+    for (var j = 0; j < codes.length; j++) {
+      out.push((codes[j] >>> 8) & 255, codes[j] & 255);
+    }
+    return out;
+  }
+
+  function lzwDecompressBytes(input) {
+    if (!input.length) return [];
+    if (input.length % 2 !== 0) throw new Error("LZW 数据长度错误");
+    var codes = [];
+    for (var i = 0; i < input.length; i += 2) codes.push((input[i] << 8) | input[i + 1]);
+    var dict = [];
+    for (var i = 0; i < 256; i++) dict[i] = [i];
+    var dictSize = 256;
+    var first = codes[0];
+    if (!dict[first]) throw new Error("LZW 首码错误");
+    var w = dict[first].slice();
+    var out = w.slice();
+    for (var k = 1; k < codes.length; k++) {
+      var code = codes[k];
+      var entry;
+      if (dict[code]) entry = dict[code].slice();
+      else if (code === dictSize) entry = w.concat([w[0]]);
+      else throw new Error("LZW 解码失败，非法码：" + code);
+      out = out.concat(entry);
+      if (dictSize < 65535) dict[dictSize++] = w.concat([entry[0]]);
+      w = entry;
+    }
+    return out;
+  }
+
+  function makeId(rawBytes, payloadBytes, algo) {
+    var rawCrc = crc32(rawBytes).toString(16).padStart(8, "0");
+    var payloadCrc = crc32(payloadBytes).toString(16).padStart(8, "0");
+    return Date.now().toString(36) + rawCrc.slice(0, 4) + payloadCrc.slice(0, 4) + algo.charAt(0);
+  }
+
+  function splitBytes(bytes, maxBytes) {
+    var list = [];
+    for (var i = 0; i < bytes.length; i += maxBytes) {
+      list.push(bytes.slice(i, i + maxBytes));
+    }
+    return list;
+  }
+
+  function compressPayload(rawBytes) {
+    var mode = $("compressMode").value;
+    if (mode === "none") {
+      return { algo: "none", bytes: rawBytes.slice(), note: "未压缩" };
+    }
+    var compressed = lzwCompressBytes(rawBytes);
+    if (mode === "auto" && compressed.length >= rawBytes.length) {
+      return { algo: "none", bytes: rawBytes.slice(), note: "压缩后没有变小，已自动使用原文传输" };
+    }
+    return { algo: "lzw", bytes: compressed, note: "LZW 压缩" };
+  }
+
+  function decompressPayload(payloadBytes, algo) {
+    if (algo === "none") return payloadBytes;
+    if (algo === "lzw") return lzwDecompressBytes(payloadBytes);
+    throw new Error("不支持的压缩算法：" + algo);
+  }
+
+  function buildChunks(text) {
+    var rawBytes = utf8Bytes(text);
+    var packed = compressPayload(rawBytes);
+    var payloadBytes = packed.bytes;
+    var maxBytes = Math.max(300, Math.min(1800, Number($("chunkSize").value) || 1000));
+    var parts = splitBytes(payloadBytes, maxBytes);
+    var id = makeId(rawBytes, payloadBytes, packed.algo);
+    var total = parts.length;
+    var rawCrc = crc32(rawBytes).toString(16).padStart(8, "0");
+    var result = parts.map(function(part, i) {
+      var partCrc = crc32(part).toString(16).padStart(8, "0");
+      var payload = base64UrlFromBytes(part);
+      return {
+        id: id,
+        index: i + 1,
+        total: total,
+        algo: packed.algo,
+        note: packed.note,
+        rawCrc: rawCrc,
+        partCrc: partCrc,
+        bytes: part.length,
+        text: "QRZ1|" + id + "|" + (i + 1) + "|" + total + "|" + packed.algo + "|" + rawCrc + "|" + partCrc + "|" + payload
+      };
+    });
+    result.meta = { rawBytes: rawBytes.length, payloadBytes: payloadBytes.length, algo: packed.algo, note: packed.note, rawCrc: rawCrc };
+    return result;
+  }
+
+  function generateAll() {
+    var input = $("input").value;
+    if (!input) {
+      $("sendInfo").innerHTML = '<span class="err">请输入文本。</span>';
+      return;
+    }
+    chunks = buildChunks(input);
+    currentIndex = 0;
+    renderCurrentQr();
+    renderChunkList();
+    var meta = chunks.meta || {};
+    var ratio = meta.rawBytes ? (meta.payloadBytes / meta.rawBytes * 100).toFixed(1) + "%" : "-";
+    $("sendInfo").innerHTML = '<span class="ok">生成成功。</span> 算法：' + meta.algo +
+      '；说明：' + meta.note +
+      '；原文 UTF-8 字节数：' + meta.rawBytes +
+      '；传输字节数：' + meta.payloadBytes +
+      '；压缩率：' + ratio +
+      '；二维码数量：' + chunks.length +
+      '。请按顺序或乱序扫描，接收端会自动排序还原。';
+  }
+
+  function renderCurrentQr() {
+    var canvas = $("canvas");
+    var title = $("qrTitle");
+    var meta = $("qrMeta");
+    if (!chunks.length) {
+      title.textContent = "等待生成";
+      meta.textContent = "0 / 0";
+      return;
+    }
+    var item = chunks[currentIndex];
+    try {
+      var qr = encodeText(item.text, $("ecc").value);
+      drawQr(qr, canvas, $("scale").value, $("margin").value);
+      title.textContent = "二维码分片 " + item.index + " / " + item.total;
+      meta.textContent = item.bytes + " bytes · " + item.algo;
+    } catch (e) {
+      $("sendInfo").innerHTML = '<span class="err">' + escapeHtml(e.message) + '</span>';
+    }
+  }
+
+  function renderChunkList() {
+    var box = $("chunkList");
+    box.innerHTML = "";
+    chunks.forEach(function(c, i) {
+      var div = document.createElement("div");
+      div.className = "chunk-item";
+      div.innerHTML = '<span>分片 ' + c.index + ' / ' + c.total + '，' + c.bytes + ' bytes，' + c.algo + '</span><span class="chip">CRC ' + c.partCrc + '</span>';
+      div.onclick = function() {
+        currentIndex = i;
+        renderCurrentQr();
+      };
+      box.appendChild(div);
+    });
+  }
+
+  function parseChunkLine(line) {
+    line = line.trim();
+    if (!line) return null;
+    var parts = line.split("|");
+    if (parts.length !== 8 || parts[0] !== "QRZ1") {
+      throw new Error("不是合法 QRZ1 分片：" + line.slice(0, 80));
+    }
+    var id = parts[1];
+    var index = Number(parts[2]);
+    var total = Number(parts[3]);
+    var algo = parts[4];
+    var rawCrc = parts[5].toLowerCase();
+    var partCrc = parts[6].toLowerCase();
+    var payload = parts[7];
+    if (!id || !Number.isInteger(index) || !Number.isInteger(total) || index < 1 || index > total) {
+      throw new Error("分片序号错误：" + line.slice(0, 80));
+    }
+    if (algo !== "lzw" && algo !== "none") throw new Error("不支持的压缩算法：" + algo);
+    var bytes = bytesFromBase64Url(payload);
+    var actualCrc = crc32(bytes).toString(16).padStart(8, "0");
+    if (actualCrc !== partCrc) {
+      throw new Error("分片 CRC 校验失败：第 " + index + " 片，期望 " + partCrc + "，实际 " + actualCrc);
+    }
+    return { id: id, index: index, total: total, algo: algo, rawCrc: rawCrc, partCrc: partCrc, bytes: bytes };
+  }
+
+  function addScans() {
+    var text = $("scanInput").value.trim();
+    if (!text) {
+      $("recvInfo").innerHTML = '<span class="err">请粘贴扫码结果。</span>';
+      return;
+    }
+
+    var lines = text.split(/\n+/).map(function(x) { return x.trim(); }).filter(Boolean);
+    var added = 0;
+    try {
+      lines.forEach(function(line) {
+        var c = parseChunkLine(line);
+        if (!c) return;
+        if (!received[c.id]) received[c.id] = { total: c.total, algo: c.algo, rawCrc: c.rawCrc, chunks: {} };
+        if (received[c.id].total !== c.total) throw new Error("同一批次 total 不一致：" + c.id);
+        if (received[c.id].algo !== c.algo) throw new Error("同一批次算法不一致：" + c.id);
+        if (received[c.id].rawCrc !== c.rawCrc) throw new Error("同一批次原文 CRC 不一致：" + c.id);
+        if (!received[c.id].chunks[c.index]) added++;
+        received[c.id].chunks[c.index] = c;
+      });
+      $("scanInput").value = "";
+      renderReceived();
+      tryMerge();
+      $("recvInfo").innerHTML = '<span class="ok">导入成功。</span> 新增分片：' + added + '。';
+    } catch (e) {
+      $("recvInfo").innerHTML = '<span class="err">' + escapeHtml(e.message) + '</span>';
+    }
+  }
+
+  function getActiveBatch() {
+    var ids = Object.keys(received);
+    if (!ids.length) return null;
+    ids.sort(function(a, b) {
+      return Object.keys(received[b].chunks).length - Object.keys(received[a].chunks).length;
+    });
+    return { id: ids[0], data: received[ids[0]] };
+  }
+
+  function renderReceived() {
+    var box = $("recvList");
+    box.innerHTML = "";
+    var batch = getActiveBatch();
+    if (!batch) {
+      box.innerHTML = "";
+      return;
+    }
+    var data = batch.data;
+    for (var i = 1; i <= data.total; i++) {
+      var div = document.createElement("div");
+      div.className = "chunk-item";
+      if (data.chunks[i]) {
+        div.innerHTML = '<span>第 ' + i + ' / ' + data.total + ' 片，' + data.algo + '</span><span class="chip">已收到</span>';
+      } else {
+        div.innerHTML = '<span>第 ' + i + ' / ' + data.total + ' 片，' + data.algo + '</span><span class="chip">缺失</span>';
+      }
+      box.appendChild(div);
+    }
+  }
+
+  function tryMerge() {
+    var batch = getActiveBatch();
+    if (!batch) return;
+    var data = batch.data;
+    var got = Object.keys(data.chunks).length;
+    if (got < data.total) {
+      $("output").value = "";
+      $("recvInfo").innerHTML = '<span class="warn">尚未完整。</span> 当前批次：' + batch.id +
+        '；已收到 ' + got + ' / ' + data.total + '。';
+      return;
+    }
+    var payloadBytes = [];
+    for (var i = 1; i <= data.total; i++) {
+      payloadBytes = payloadBytes.concat(data.chunks[i].bytes);
+    }
+    var rawBytes = decompressPayload(payloadBytes, data.algo);
+    var rawCrc = crc32(rawBytes).toString(16).padStart(8, "0");
+    if (rawCrc !== data.rawCrc) throw new Error("原文 CRC 校验失败：期望 " + data.rawCrc + "，实际 " + rawCrc);
+    $("output").value = bytesToText(rawBytes);
+    $("recvInfo").innerHTML = '<span class="ok">还原完成。</span> 当前批次：' + batch.id +
+      '；算法：' + data.algo +
+      '；分片 ' + got + ' / ' + data.total +
+      '；传输字节数：' + payloadBytes.length +
+      '；还原字节数：' + rawBytes.length +
+      '；原文 CRC：' + rawCrc + '。';
+  }
+
+  function downloadCurrent() {
+    if (!chunks.length) return;
+    var a = document.createElement("a");
+    a.href = $("canvas").toDataURL("image/png");
+    a.download = "qrcode_" + chunks[currentIndex].index + "_of_" + chunks[currentIndex].total + ".png";
+    a.click();
+  }
+
+  function downloadAll() {
+    if (!chunks.length) return;
+    var old = currentIndex;
+    for (var i = 0; i < chunks.length; i++) {
+      currentIndex = i;
+      renderCurrentQr();
+      downloadCurrent();
+    }
+    currentIndex = old;
+    renderCurrentQr();
+  }
+
+  function downloadTxt() {
+    var val = $("output").value;
+    if (!val) return;
+    var blob = new Blob([val], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "merged_text.txt";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function crc32(bytes) {
+    var table = crc32.table || (crc32.table = makeCrcTable());
+    var crc = -1;
+    for (var i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xff];
+    }
+    return (crc ^ -1) >>> 0;
+  }
+
+  function makeCrcTable() {
+    var table = [];
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) {
+        c = ((c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1));
+      }
+      table[n] = c >>> 0;
+    }
+    return table;
+  }
+
+  function getNumRawDataModules(ver) {
+    var result = (16 * ver + 128) * ver + 64;
+    if (ver >= 2) {
+      var numAlign = Math.floor(ver / 7) + 2;
+      result -= (25 * numAlign - 10) * numAlign - 55;
+      if (ver >= 7) result -= 36;
+    }
+    return result;
+  }
+
+  function getNumDataCodewords(ver, ecl) {
+    return Math.floor(getNumRawDataModules(ver) / 8)
+      - ECC_CODEWORDS_PER_BLOCK[ecl][ver] * NUM_ERROR_CORRECTION_BLOCKS[ecl][ver];
+  }
+
+  function BitBuffer() { this.bits = []; }
+  BitBuffer.prototype.appendBits = function(val, len) {
+    if (len < 0 || len > 31 || val >>> len !== 0) throw new Error("appendBits 参数错误");
+    for (var i = len - 1; i >= 0; i--) this.bits.push((val >>> i) & 1);
+  };
+
+  function encodeText(text, eccName) {
+    var ecl = ECC_LEVELS[eccName] == null ? 0 : ECC_LEVELS[eccName];
+    var data = utf8Bytes(text);
+    var version = -1;
+    for (var v = 1; v <= 40; v++) {
+      var ccbits = v <= 9 ? 8 : 16;
+      var capacityBits = getNumDataCodewords(v, ecl) * 8;
+      if (4 + ccbits + data.length * 8 <= capacityBits) {
+        version = v;
+        break;
+      }
+    }
+    if (version < 0) {
+      throw new Error("单个分片仍然过长。请降低“每片最大字节”，建议 800～1500。");
+    }
+
+    var bb = new BitBuffer();
+    bb.appendBits(0x4, 4);
+    bb.appendBits(data.length, version <= 9 ? 8 : 16);
+    data.forEach(function(b) { bb.appendBits(b, 8); });
+
+    var dataCapacityBits = getNumDataCodewords(version, ecl) * 8;
+    bb.appendBits(0, Math.min(4, dataCapacityBits - bb.bits.length));
+    while (bb.bits.length % 8 !== 0) bb.appendBits(0, 1);
+
+    var padBytes = [0xEC, 0x11], i = 0;
+    while (bb.bits.length < dataCapacityBits) bb.appendBits(padBytes[i++ % 2], 8);
+
+    var dataCodewords = [];
+    for (i = 0; i < bb.bits.length; i += 8) {
+      var b = 0;
+      for (var j = 0; j < 8; j++) b = (b << 1) | bb.bits[i + j];
+      dataCodewords.push(b);
+    }
+    return new QrCode(version, ecl, dataCodewords);
+  }
+
+  function QrCode(version, ecl, dataCodewords) {
+    this.version = version;
+    this.size = version * 4 + 17;
+    this.ecl = ecl;
+    this.modules = [];
+    this.isFunction = [];
+    for (var y = 0; y < this.size; y++) {
+      this.modules.push(new Array(this.size).fill(false));
+      this.isFunction.push(new Array(this.size).fill(false));
+    }
+    this.drawFunctionPatterns();
+    var allCodewords = this.addEccAndInterleave(dataCodewords);
+    this.drawCodewords(allCodewords);
+    var mask = this.handleConstructorMasking();
+    this.drawFormatBits(mask);
+    this.mask = mask;
+  }
+
+  QrCode.prototype.setFunctionModule = function(x, y, isDark) {
+    this.modules[y][x] = isDark;
+    this.isFunction[y][x] = true;
+  };
+
+  QrCode.prototype.drawFunctionPatterns = function() {
+    for (var i = 0; i < this.size; i++) {
+      this.setFunctionModule(6, i, i % 2 === 0);
+      this.setFunctionModule(i, 6, i % 2 === 0);
+    }
+    this.drawFinderPattern(3, 3);
+    this.drawFinderPattern(this.size - 4, 3);
+    this.drawFinderPattern(3, this.size - 4);
+
+    var alignPatPos = this.getAlignmentPatternPositions();
+    var numAlign = alignPatPos.length;
+    for (var i = 0; i < numAlign; i++) {
+      for (var j = 0; j < numAlign; j++) {
+        if (!((i === 0 && j === 0) || (i === 0 && j === numAlign - 1) || (i === numAlign - 1 && j === 0)))
+          this.drawAlignmentPattern(alignPatPos[i], alignPatPos[j]);
+      }
+    }
+    this.drawFormatBits(0);
+    this.drawVersion();
+  };
+
+  QrCode.prototype.drawFinderPattern = function(x, y) {
+    for (var dy = -4; dy <= 4; dy++) {
+      for (var dx = -4; dx <= 4; dx++) {
+        var xx = x + dx, yy = y + dy;
+        if (0 <= xx && xx < this.size && 0 <= yy && yy < this.size) {
+          var dist = Math.max(Math.abs(dx), Math.abs(dy));
+          this.setFunctionModule(xx, yy, dist !== 2 && dist !== 4);
+        }
+      }
+    }
+  };
+
+  QrCode.prototype.drawAlignmentPattern = function(x, y) {
+    for (var dy = -2; dy <= 2; dy++) {
+      for (var dx = -2; dx <= 2; dx++) {
+        this.setFunctionModule(x + dx, y + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+    }
+  };
+
+  QrCode.prototype.getAlignmentPatternPositions = function() {
+    if (this.version === 1) return [];
+    var numAlign = Math.floor(this.version / 7) + 2;
+    var step = (this.version === 32) ? 26 : Math.ceil((this.version * 4 + 4) / (numAlign * 2 - 2)) * 2;
+    var result = [6];
+    for (var pos = this.size - 7; result.length < numAlign; pos -= step)
+      result.splice(1, 0, pos);
+    return result;
+  };
+
+  QrCode.prototype.drawFormatBits = function(mask) {
+    var data = (FORMAT_BITS[this.ecl] << 3) | mask;
+    var rem = data;
+    for (var i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+    var bits = ((data << 10) | rem) ^ 0x5412;
+
+    for (var i = 0; i <= 5; i++) this.setFunctionModule(8, i, getBit(bits, i));
+    this.setFunctionModule(8, 7, getBit(bits, 6));
+    this.setFunctionModule(8, 8, getBit(bits, 7));
+    this.setFunctionModule(7, 8, getBit(bits, 8));
+    for (var i = 9; i < 15; i++) this.setFunctionModule(14 - i, 8, getBit(bits, i));
+
+    for (var i = 0; i < 8; i++) this.setFunctionModule(this.size - 1 - i, 8, getBit(bits, i));
+    for (var i = 8; i < 15; i++) this.setFunctionModule(8, this.size - 15 + i, getBit(bits, i));
+    this.setFunctionModule(8, this.size - 8, true);
+  };
+
+  QrCode.prototype.drawVersion = function() {
+    if (this.version < 7) return;
+    var rem = this.version;
+    for (var i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+    var bits = (this.version << 12) | rem;
+    for (var i = 0; i < 18; i++) {
+      var bit = getBit(bits, i);
+      var a = this.size - 11 + i % 3;
+      var b = Math.floor(i / 3);
+      this.setFunctionModule(a, b, bit);
+      this.setFunctionModule(b, a, bit);
+    }
+  };
+
+  QrCode.prototype.addEccAndInterleave = function(data) {
+    var ver = this.version, ecl = this.ecl;
+    var numBlocks = NUM_ERROR_CORRECTION_BLOCKS[ecl][ver];
+    var blockEccLen = ECC_CODEWORDS_PER_BLOCK[ecl][ver];
+    var rawCodewords = Math.floor(getNumRawDataModules(ver) / 8);
+    var numShortBlocks = numBlocks - rawCodewords % numBlocks;
+    var shortBlockLen = Math.floor(rawCodewords / numBlocks);
+
+    var blocks = [];
+    var k = 0;
+    var rsDiv = reedSolomonComputeDivisor(blockEccLen);
+    for (var i = 0; i < numBlocks; i++) {
+      var datLen = shortBlockLen - blockEccLen + (i < numShortBlocks ? 0 : 1);
+      var dat = data.slice(k, k + datLen);
+      k += datLen;
+      var ecc = reedSolomonComputeRemainder(dat, rsDiv);
+      if (i < numShortBlocks) dat.push(0);
+      blocks.push(dat.concat(ecc));
+    }
+
+    var result = [];
+    for (var i = 0; i < blocks[0].length; i++) {
+      for (var j = 0; j < blocks.length; j++) {
+        if (i !== shortBlockLen - blockEccLen || j >= numShortBlocks)
+          result.push(blocks[j][i]);
+      }
+    }
+    return result;
+  };
+
+  QrCode.prototype.drawCodewords = function(data) {
+    var i = 0;
+    for (var right = this.size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (var vert = 0; vert < this.size; vert++) {
+        for (var j = 0; j < 2; j++) {
+          var x = right - j;
+          var upward = ((right + 1) & 2) === 0;
+          var y = upward ? this.size - 1 - vert : vert;
+          if (!this.isFunction[y][x] && i < data.length * 8) {
+            this.modules[y][x] = getBit(data[i >>> 3], 7 - (i & 7));
+            i++;
+          }
+        }
+      }
+    }
+  };
+
+  QrCode.prototype.applyMask = function(mask) {
+    for (var y = 0; y < this.size; y++) {
+      for (var x = 0; x < this.size; x++) {
+        var invert;
+        switch (mask) {
+          case 0: invert = (x + y) % 2 === 0; break;
+          case 1: invert = y % 2 === 0; break;
+          case 2: invert = x % 3 === 0; break;
+          case 3: invert = (x + y) % 3 === 0; break;
+          case 4: invert = (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0; break;
+          case 5: invert = x * y % 2 + x * y % 3 === 0; break;
+          case 6: invert = (x * y % 2 + x * y % 3) % 2 === 0; break;
+          case 7: invert = ((x + y) % 2 + x * y % 3) % 2 === 0; break;
+          default: throw new Error("mask 错误");
+        }
+        if (!this.isFunction[y][x] && invert) this.modules[y][x] = !this.modules[y][x];
+      }
+    }
+  };
+
+  QrCode.prototype.handleConstructorMasking = function() {
+    var minPenalty = Infinity, bestMask = 0;
+    for (var mask = 0; mask < 8; mask++) {
+      this.applyMask(mask);
+      this.drawFormatBits(mask);
+      var penalty = this.getPenaltyScore();
+      if (penalty < minPenalty) {
+        minPenalty = penalty;
+        bestMask = mask;
+      }
+      this.applyMask(mask);
+    }
+    this.applyMask(bestMask);
+    return bestMask;
+  };
+
+  QrCode.prototype.getPenaltyScore = function() {
+    var result = 0;
+    var size = this.size;
+
+    for (var y = 0; y < size; y++) {
+      var runColor = false, runX = 0, runHistory = [0,0,0,0,0,0,0];
+      for (var x = 0; x < size; x++) {
+        if (this.modules[y][x] === runColor) {
+          runX++;
+          if (runX === 5) result += 3;
+          else if (runX > 5) result++;
+        } else {
+          this.finderPenaltyAddHistory(runX, runHistory);
+          if (!runColor) result += this.finderPenaltyCountPatterns(runHistory) * 40;
+          runColor = this.modules[y][x];
+          runX = 1;
+        }
+      }
+      result += this.finderPenaltyTerminateAndCount(runColor, runX, runHistory) * 40;
+    }
+
+    for (var x = 0; x < size; x++) {
+      var runColor = false, runY = 0, runHistory = [0,0,0,0,0,0,0];
+      for (var y = 0; y < size; y++) {
+        if (this.modules[y][x] === runColor) {
+          runY++;
+          if (runY === 5) result += 3;
+          else if (runY > 5) result++;
+        } else {
+          this.finderPenaltyAddHistory(runY, runHistory);
+          if (!runColor) result += this.finderPenaltyCountPatterns(runHistory) * 40;
+          runColor = this.modules[y][x];
+          runY = 1;
+        }
+      }
+      result += this.finderPenaltyTerminateAndCount(runColor, runY, runHistory) * 40;
+    }
+
+    for (var y = 0; y < size - 1; y++) {
+      for (var x = 0; x < size - 1; x++) {
+        var c = this.modules[y][x];
+        if (c === this.modules[y][x+1] && c === this.modules[y+1][x] && c === this.modules[y+1][x+1])
+          result += 3;
+      }
+    }
+
+    var dark = 0;
+    for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) if (this.modules[y][x]) dark++;
+    var total = size * size;
+    var k = Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1;
+    result += k * 10;
+    return result;
+  };
+
+  QrCode.prototype.finderPenaltyCountPatterns = function(runHistory) {
+    var n = runHistory[1];
+    return (n > 0 && runHistory[2] === n && runHistory[3] === n * 3 && runHistory[4] === n && runHistory[5] === n &&
+      runHistory[0] >= n * 4 && runHistory[6] >= n * 4) ? 1 : 0;
+  };
+
+  QrCode.prototype.finderPenaltyAddHistory = function(currentRun, runHistory) {
+    if (runHistory[0] === 0) currentRun += this.size;
+    runHistory.pop();
+    runHistory.unshift(currentRun);
+  };
+
+  QrCode.prototype.finderPenaltyTerminateAndCount = function(currentRunColor, currentRunLength, runHistory) {
+    if (currentRunColor) {
+      this.finderPenaltyAddHistory(currentRunLength, runHistory);
+      currentRunLength = 0;
+    }
+    currentRunLength += this.size;
+    this.finderPenaltyAddHistory(currentRunLength, runHistory);
+    return this.finderPenaltyCountPatterns(runHistory);
+  };
+
+  function reedSolomonComputeDivisor(degree) {
+    var result = new Array(degree).fill(0);
+    result[degree - 1] = 1;
+    var root = 1;
+    for (var i = 0; i < degree; i++) {
+      for (var j = 0; j < result.length; j++) {
+        result[j] = reedSolomonMultiply(result[j], root);
+        if (j + 1 < result.length) result[j] ^= result[j + 1];
+      }
+      root = reedSolomonMultiply(root, 0x02);
+    }
+    return result;
+  }
+
+  function reedSolomonComputeRemainder(data, divisor) {
+    var result = new Array(divisor.length).fill(0);
+    data.forEach(function(b) {
+      var factor = b ^ result.shift();
+      result.push(0);
+      for (var i = 0; i < divisor.length; i++)
+        result[i] ^= reedSolomonMultiply(divisor[i], factor);
+    });
+    return result;
+  }
+
+  function reedSolomonMultiply(x, y) {
+    var z = 0;
+    for (var i = 7; i >= 0; i--) {
+      z = (z << 1) ^ ((z >>> 7) * 0x11D);
+      z ^= ((y >>> i) & 1) * x;
+    }
+    return z;
+  }
+
+  function getBit(x, i) {
+    return ((x >>> i) & 1) !== 0;
+  }
+
+  function drawQr(qr, canvas, scale, margin) {
+    scale = Math.max(2, Math.min(24, Number(scale) || 8));
+    margin = Math.max(0, Math.min(12, Number(margin) || 4));
+
+    var size = qr.size;
+    var dim = (size + margin * 2) * scale;
+    canvas.width = dim;
+    canvas.height = dim;
+    var ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = "#000";
+    for (var y = 0; y < size; y++) {
+      for (var x = 0; x < size; x++) {
+        if (qr.modules[y][x]) {
+          ctx.fillRect((x + margin) * scale, (y + margin) * scale, scale, scale);
+        }
+      }
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(ch) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]);
+    });
+  }
+
+  function switchTab(name) {
+    var sender = name === "sender";
+    $("senderPanel").classList.toggle("hidden", !sender);
+    $("receiverPanel").classList.toggle("hidden", sender);
+    $("tabSender").classList.toggle("active", sender);
+    $("tabReceiver").classList.toggle("active", !sender);
+  }
+
+
+  window.QRLib={utf8Bytes:utf8Bytes,bytesToText:bytesToText,base64UrlFromBytes:base64UrlFromBytes,bytesFromBase64Url:bytesFromBase64Url,lzwCompressBytes:lzwCompressBytes,lzwDecompressBytes:lzwDecompressBytes,crc32:crc32,encodeText:encodeText,drawQr:drawQr};
+})();
+</script><script>
+(function(){"use strict";var chunks=[],playList=[],currentPos=0,timer=null;function $(id){return document.getElementById(id)}function u16be(a,o,v){a[o]=(v>>>8)&255;a[o+1]=v&255}function u32be(a,o,v){a[o]=(v>>>24)&255;a[o+1]=(v>>>16)&255;a[o+2]=(v>>>8)&255;a[o+3]=v&255}function splitBytes(bytes,n){var r=[];for(var i=0;i<bytes.length;i+=n)r.push(bytes.slice(i,i+n));return r}function compress(raw){var lzw=QRLib.lzwCompressBytes(raw);if(lzw.length&&lzw.length<raw.length)return{algo:"lzw",bytes:lzw,note:"LZW 压缩"};return{algo:"none",bytes:raw.slice(),note:"未压缩/压缩无收益"}}function makePacket(session,index,total,algo,rawCrc,payload){var out=new Uint8Array(22+payload.length);out[0]=0x51;out[1]=0x5A;out[2]=0x32;out[3]=0x21;out[4]=1;out[5]=algo==="lzw"?1:0;u32be(out,6,session);u16be(out,10,index);u16be(out,12,total);u32be(out,14,rawCrc);u32be(out,18,QRLib.crc32(payload));out.set(payload,22);return "QRZ2|"+QRLib.base64UrlFromBytes(Array.from(out))}function buildChunks(text){var raw=QRLib.utf8Bytes(text),packed=compress(raw),maxBytes=Math.max(120,Math.min(800,Number($("chunkSize").value)||300)),parts=splitBytes(packed.bytes,maxBytes),total=parts.length,rawCrc=QRLib.crc32(raw),session=(Date.now()^rawCrc^packed.bytes.length)>>>0,result=parts.map(function(part,i){return{index:i+1,total:total,bytes:part.length,algo:packed.algo,rawCrc:rawCrc,session:session,text:makePacket(session,i+1,total,packed.algo,rawCrc,part)}});result.meta={rawBytes:raw.length,payloadBytes:packed.bytes.length,algo:packed.algo,note:packed.note,rawCrc:rawCrc,session:session};return result}function generate(){var text=$("input").value;if(!text.trim()){$("info").innerHTML='<span class="err">请输入文本。</span>';return}try{pause();chunks=buildChunks(text);playList=chunks.map(function(c){return c.index});currentPos=0;render();var m=chunks.meta||{},ratio=m.rawBytes?(m.payloadBytes/m.rawBytes*100).toFixed(1)+"%":"-";$("info").innerHTML='<span class="ok">生成成功。</span> 原文 '+m.rawBytes+' bytes；传输 '+m.payloadBytes+' bytes；压缩率 '+ratio+'；分片 '+chunks.length+'；算法 '+m.algo+'。'}catch(e){console.error(e);$("info").innerHTML='<span class="err">生成失败：'+e.message+'</span>'}}function getCurrentChunk(){if(!chunks.length||!playList.length)return null;return chunks[playList[currentPos]-1]||null}function render(){var c=getCurrentChunk(),canvas=$("qrCanvas"),ctx=canvas.getContext("2d");if(!c){$("title").textContent="等待生成";$("chip").textContent="0 / 0";$("partLabel").textContent="等待生成";$("sessionMeta").textContent="Session -";$("payloadMeta").textContent="请先生成分片";canvas.width=420;canvas.height=420;ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);return}$("title").textContent="当前分片 "+c.index+" / "+c.total;$("chip").textContent=(currentPos+1)+" / "+playList.length;$("partLabel").textContent="#"+c.index+" / "+c.total;$("sessionMeta").textContent="Session "+(c.session>>>0).toString(16).padStart(8,"0")+" · CRC "+(c.rawCrc>>>0).toString(16).padStart(8,"0");$("payloadMeta").textContent=c.bytes+"B · "+c.algo+" · "+(timer?"播放中":"暂停");var qr=QRLib.encodeText(c.text,$("ecc").value);QRLib.drawQr(qr,canvas,Number($("scale").value)||14,Number($("quiet").value)||8)}function next(){if(!playList.length)return;currentPos=(currentPos+1)%playList.length;render()}function prev(){if(!playList.length)return;currentPos=(currentPos-1+playList.length)%playList.length;render()}function play(){if(!chunks.length)return;pause();timer=setInterval(next,Math.max(800,Number($("interval").value)||2200));render()}function pause(){if(timer)clearInterval(timer);timer=null;render()}function parseMissing(s){var nums=(s||"").split(/[^0-9]+/).map(Number).filter(function(n){return Number.isInteger(n)&&n>=1&&n<=chunks.length}),seen={};return nums.filter(function(n){if(seen[n])return false;seen[n]=true;return true})}function applyMissing(){if(!chunks.length)return;var nums=parseMissing($("missingInput").value);if(nums.length){playList=nums;currentPos=0;$("info").innerHTML='<span class="warn">缺片播放模式。</span> 当前只播放 '+nums.length+' 个缺片。'}else{playList=chunks.map(function(c){return c.index});currentPos=0;$("info").innerHTML='<span class="ok">已恢复全部分片播放。</span>'}render()}function clearAll(){pause();$("input").value="";$("missingInput").value="";chunks=[];playList=[];currentPos=0;$("info").textContent="等待生成。";render()}function togglePlayMode(){document.body.classList.toggle("playMode");setTimeout(render,60)}$("generate").onclick=generate;$("clear").onclick=clearAll;$("next").onclick=next;$("prev").onclick=prev;$("play").onclick=play;$("pause").onclick=pause;$("applyMissing").onclick=applyMissing;$("playMode").onclick=togglePlayMode;["ecc","scale","quiet"].forEach(function(id){$(id).onchange=render});$("input").value='{\n  "message": "这里粘贴要离线传输的文本。",\n  "mode": "scan-accumulator",\n  "version": "v4"\n}';generate()})();
+</script></body></html>
